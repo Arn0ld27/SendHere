@@ -5,6 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Student Submission Portal</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  /* Dagdag styles para sa custom dropdown na hinding-hindi mag-a-fail sa cellphone */
+  .autocomplete-wrapper {
+    position: relative;
+    width: 100%;
+  }
+  .dropdown-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 99;
+    display: none;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  }
+  .dropdown-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 15px;
+    color: #0f172a;
+    border-bottom: 1px.solid #f1f5f9;
+  }
+  .dropdown-item:hover, .dropdown-item.selected {
+    background: #eef2ff;
+    color: #4f46e5;
+    font-weight: 600;
+  }
+</style>
 </head>
 <body>
 <div class="container">
@@ -24,8 +58,11 @@
     <div id="submitTab">
       <form id="submissionForm">
         <label for="name">Student Name</label>
-        <input id="name" list="nameList" type="text" placeholder="Type or select your name" required autocomplete="off">
-        <datalist id="nameList"></datalist>
+        <div class="autocomplete-wrapper">
+          <input id="name" type="text" placeholder="Type to search your name..." autocomplete="off" required>
+          <div id="nameDropdown" class="dropdown-list"></div>
+        </div>
+        <input type="hidden" id="selectedValidName" required>
 
         <label for="section">Section</label>
         <select id="section" required>
@@ -65,8 +102,11 @@
     <!-- STATUS TAB -->
     <div id="statusTab" style="display:none">
       <label for="checkName">Student Name</label>
-      <input id="checkName" list="nameList2" type="text" placeholder="Type your name" required autocomplete="off">
-      <datalist id="nameList2"></datalist>
+      <div class="autocomplete-wrapper">
+        <input id="checkName" type="text" placeholder="Type to search your name..." autocomplete="off" required>
+        <div id="checkNameDropdown" class="dropdown-list"></div>
+      </div>
+      <input type="hidden" id="selectedCheckValidName" required>
 
       <label for="checkCode">Access Code</label>
       <input id="checkCode" type="text" placeholder="e.g. JD-4821-KX" required style="text-transform:uppercase">
@@ -86,27 +126,96 @@ async function loadStudents() {
   try {
     const res = await fetch(SCRIPT_URL + "?action=students");
     students = await res.json();
+    students.sort((a, b) => a.name.localeCompare(b.name));
 
-    const names = [...new Set(students.map(s => s.name))].sort();
     const sections = [...new Set(students.map(s => s.section))].sort();
-
-    const nameOpts = names.map(n => `<option value="${escapeHtml(n)}">`).join("");
-    document.getElementById("nameList").innerHTML = nameOpts;
-    document.getElementById("nameList2").innerHTML = nameOpts;
-
     const secOpts = sections.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
     document.getElementById("section").innerHTML = '<option value="">-- Select Section --</option>' + secOpts;
 
-    document.getElementById("name").addEventListener("change", autoFillSection);
+    setupCustomDropdown("name", "nameDropdown", "selectedValidName", (selectedStudent) => {
+      if (selectedStudent) {
+        document.getElementById("section").value = selectedStudent.section;
+      }
+    });
+
+    setupCustomDropdown("checkName", "checkNameDropdown", "selectedCheckValidName", null);
+
   } catch (e) {
     console.error(e);
   }
 }
 
-function autoFillSection() {
-  const name = document.getElementById("name").value.trim();
-  const match = students.find(s => s.name.toLowerCase() === name.toLowerCase());
-  if (match) document.getElementById("section").value = match.section;
+// Function para sa Robust Searchable Dropdown na gagana sa PC at Cellphone
+function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallback) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const hiddenValid = document.getElementById(hiddenValidId);
+
+  input.addEventListener("input", function() {
+    const query = this.value.toLowerCase().trim();
+    hiddenValid.value = ""; // I-invalidate muna kapag nagbago ang tinype
+    
+    if (!query) {
+      dropdown.style.display = "none";
+      return;
+    }
+
+    const filtered = students.filter(s => s.name.toLowerCase().includes(query));
+    
+    if (filtered.length === 0) {
+      dropdown.style.display = "none";
+      return;
+    }
+
+    dropdown.innerHTML = filtered.map(s => `
+      <div class="dropdown-item" data-name="${escapeHtml(s.name)}" data-section="${escapeHtml(s.section)}">
+        ${escapeHtml(s.name)} <span style="color:#64748b; font-size:12px;">(${escapeHtml(s.section)})</span>
+      </div>
+    `).join("");
+
+    dropdown.style.display = "block";
+
+    // Click event para sa items sa dropdown
+    dropdown.querySelectorAll(".dropdown-item").forEach(item => {
+      mousedownOrClick(item, () => {
+        const name = item.getAttribute("data-name");
+        const section = item.getAttribute("data-section");
+        input.value = name;
+        hiddenValid.value = name; // I-set na valid ang pangalan
+        dropdown.style.display = "none";
+
+        const matchedStudent = students.find(s => s.name === name);
+        if (onSelectCallback) onSelectCallback(matchedStudent);
+      });
+    });
+  });
+
+  input.addEventListener("focus", function() {
+    if (this.value.trim() && dropdown.children.length > 0) {
+      dropdown.style.display = "block";
+    }
+  });
+
+  input.addEventListener("blur", function() {
+    // Bigyan ng konting oras para mag-click muna ang user bago mawala ang dropdown
+    setTimeout(() => { dropdown.style.display = "none"; }, 200);
+    // Kung ang tinype ay wala sa listahan, i-clear ang input para bawal ang gawa-gawang pangalan
+    if (input.value !== hiddenValid.value) {
+      hiddenValid.value = "";
+    }
+  });
+}
+
+// Helper para mabilis mag-register ng click/touch sa mobile at desktop
+function mousedownOrClick(element, callback) {
+  element.addEventListener("mousedown", (e) => {
+    e.preventDefault(); // Iwasan mawala ang focus agad
+    callback();
+  });
+  element.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    callback();
+  });
 }
 
 function switchTab(tab, ev) {
@@ -118,12 +227,20 @@ function switchTab(tab, ev) {
 
 document.getElementById("submissionForm").addEventListener("submit", async function(e) {
   e.preventDefault();
+  
+  const validName = document.getElementById("selectedValidName").value;
+  if (!validName) {
+    alert("Please select a valid name from the dropdown list. You cannot enter a name that is not in the list.");
+    document.getElementById("name").focus();
+    return;
+  }
+
   const btn = document.getElementById("submitBtn");
   btn.disabled = true; btn.textContent = "SUBMITTING...";
 
   const data = {
     action: "submit",
-    name: document.getElementById("name").value.trim(),
+    name: validName,
     section: document.getElementById("section").value,
     link: document.getElementById("link").value.trim()
   };
@@ -138,6 +255,7 @@ document.getElementById("submissionForm").addEventListener("submit", async funct
 
     if (result.success) {
       document.getElementById("submissionForm").reset();
+      document.getElementById("selectedValidName").value = "";
       document.getElementById("codeValue").textContent = result.code;
       document.getElementById("codeBox").style.display = "block";
       showMessage("Submission received successfully!", "success");
@@ -159,11 +277,11 @@ function copyCode() {
 }
 
 async function checkStatus() {
-  const name = document.getElementById("checkName").value.trim();
+  const name = document.getElementById("selectedCheckValidName").value;
   const code = document.getElementById("checkCode").value.trim();
 
   if (!name || !code) {
-    alert("Please enter your name and access code.");
+    alert("Please select a valid name from the dropdown and enter your access code.");
     return;
   }
 
