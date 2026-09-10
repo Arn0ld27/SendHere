@@ -123,28 +123,42 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby98QvlSPYEW8UMBwOtJ
 let students = [];
 
 async function loadStudents() {
+  // 1. Kunin muna ang naka-save na data sa browser para instant lumabas
+  const cachedStudents = localStorage.getItem("cachedStudents");
+  if (cachedStudents) {
+    students = JSON.parse(cachedStudents);
+    populateDropdowns();
+  }
+
+  // 2. Habang naka-display ang cache, kumuha ng bagong update sa background
   try {
     const res = await fetch(SCRIPT_URL + "?action=students");
     students = await res.json();
     students.sort((a, b) => a.name.localeCompare(b.name));
-
-    const sections = [...new Set(students.map(s => s.section))].sort();
-    const secOpts = sections.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
-    document.getElementById("section").innerHTML = '<option value="">-- Select Section --</option>' + secOpts;
-
-    setupCustomDropdown("name", "nameDropdown", "selectedValidName", (selectedStudent) => {
-      if (selectedStudent) {
-        document.getElementById("section").value = selectedStudent.section;
-      }
-    });
-
-    setupCustomDropdown("checkName", "checkNameDropdown", "selectedCheckValidName", null);
-
+    
+    // I-save sa localStorage para sa susunod na bukas
+    localStorage.setItem("cachedStudents", JSON.stringify(students));
+    
+    populateDropdowns();
   } catch (e) {
-    console.error(e);
+    console.error("Failed to fetch fresh student list, using cache.", e);
   }
 }
 
+// Ilipat ang paggawa ng options sa hiwalay na function para mabilis ma-load
+function populateDropdowns() {
+  const sections = [...new Set(students.map(s => s.section))].sort();
+  const secOpts = sections.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  document.getElementById("section").innerHTML = '<option value="">-- Select Section --</option>' + secOpts;
+
+  setupCustomDropdown("name", "nameDropdown", "selectedValidName", (selectedStudent) => {
+    if (selectedStudent) {
+      document.getElementById("section").value = selectedStudent.section;
+    }
+  });
+
+  setupCustomDropdown("checkName", "checkNameDropdown", "selectedCheckValidName", null);
+}
 // Function para sa Robust Searchable Dropdown na gagana sa PC at Cellphone
 function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallback) {
   const input = document.getElementById(inputId);
