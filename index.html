@@ -6,7 +6,6 @@
 <title>Student Submission Portal</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  /* Dagdag styles para sa custom dropdown na hinding-hindi mag-a-fail sa cellphone */
   .autocomplete-wrapper {
     position: relative;
     width: 100%;
@@ -31,12 +30,42 @@
     cursor: pointer;
     font-size: 15px;
     color: #0f172a;
-    border-bottom: 1px.solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
   }
   .dropdown-item:hover, .dropdown-item.selected {
     background: #eef2ff;
     color: #4f46e5;
     font-weight: 600;
+  }
+  /* Deadline Timer Banner */
+  .deadline-banner {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .deadline-banner.open {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #166534;
+  }
+  .deadline-banner.closed {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+  }
+  .deadline-title {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .deadline-clock {
+    font-size: 18px;
+    font-weight: 800;
   }
 </style>
 </head>
@@ -48,6 +77,12 @@
     </div>
     <h1>Student Submission Portal</h1>
     <p class="subtitle">Submit your Google Drive link</p>
+
+    <!-- DEADLINE STATUS BANNER -->
+    <div id="deadlineBanner" class="deadline-banner">
+      <div class="deadline-title" id="deadlineTitle">Checking submission status...</div>
+      <div class="deadline-clock" id="deadlineClock">—</div>
+    </div>
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab('submit', event)">Submit</button>
@@ -121,31 +156,31 @@
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby98QvlSPYEW8UMBwOtJGeBa9y2Vfjpnzvua_KQn0Ud2jodU9iFgvIDjaORb7nSpd8d/exec";
 let students = [];
+let deadlineInterval = null;
 
-async function loadStudents() {
-  // 1. Kunin muna ang naka-save na data sa browser para instant lumabas
+async function loadPortalData() {
+  // Instant load galing localStorage cache kung meron man para mabilis
   const cachedStudents = localStorage.getItem("cachedStudents");
   if (cachedStudents) {
     students = JSON.parse(cachedStudents);
     populateDropdowns();
   }
 
-  // 2. Habang naka-display ang cache, kumuha ng bagong update sa background
   try {
-    const res = await fetch(SCRIPT_URL + "?action=students");
-    students = await res.json();
-    students.sort((a, b) => a.name.localeCompare(b.name));
+    const res = await fetch(SCRIPT_URL + "?action=portalData");
+    const data = await res.json();
     
-    // I-save sa localStorage para sa susunod na bukas
+    students = data.students;
+    students.sort((a, b) => a.name.localeCompare(b.name));
     localStorage.setItem("cachedStudents", JSON.stringify(students));
     
     populateDropdowns();
+    updateDeadlineUI(data.settings);
   } catch (e) {
-    console.error("Failed to fetch fresh student list, using cache.", e);
+    console.error("Failed to load portal data", e);
   }
 }
 
-// Ilipat ang paggawa ng options sa hiwalay na function para mabilis ma-load
 function populateDropdowns() {
   const sections = [...new Set(students.map(s => s.section))].sort();
   const secOpts = sections.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
@@ -159,7 +194,104 @@ function populateDropdowns() {
 
   setupCustomDropdown("checkName", "checkNameDropdown", "selectedCheckValidName", null);
 }
-// Function para sa Robust Searchable Dropdown na gagana sa PC at Cellphone
+
+
+function parseDeadline(deadlineStr) {
+  // Handle both "2025-01-15T14:30" and "2025-01-15T14:30:00" and ISO strings
+  if (!deadlineStr) return null;
+  let str = String(deadlineStr).trim();
+  // If it's already a full ISO string with Z or offset, use as-is
+  if (/Z$|[+-]\d{2}:?\d{2}$/.test(str)) {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // Otherwise treat as local datetime-local value
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDeadlineDisplay(date) {
+  const opts = {
+    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true
+  };
+  return date.toLocaleString(undefined, opts);
+}
+
+function updateDeadlineUI(settings) {
+  const banner = document.getElementById("deadlineBanner");
+  const title = document.getElementById("deadlineTitle");
+  const clock = document.getElementById("deadlineClock");
+  const submitBtn = document.getElementById("submitBtn");
+
+  if (deadlineInterval) clearInterval(deadlineInterval);
+
+  if (settings.status === "closed") {
+    banner.className = "deadline-banner closed";
+    title.textContent = "SUBMISSIONS ARE CURRENTLY CLOSED";
+    clock.textContent = "The instructor has closed the submission portal.";
+    submitBtn.disabled = true;
+    submitBtn.textContent = "PORTAL CLOSED";
+    return;
+  }
+
+  // Kung may deadline time na naka-set
+  if (settings.deadline) {
+    const deadlineDate = parseDeadline(settings.deadline);
+    if (!deadlineDate) {
+      banner.className = "deadline-banner open";
+      title.textContent = "SUBMISSIONS ARE OPEN";
+      clock.textContent = "Deadline set but could not be read.";
+      submitBtn.disabled = false;
+      submitBtn.textContent = "SUBMIT REPORT";
+      return;
+    }
+
+    const deadlineTime = deadlineDate.getTime();
+    const deadlineText = formatDeadlineDisplay(deadlineDate);
+
+    const tick = () => {
+      const now = Date.now();
+      const distance = deadlineTime - now;
+
+      if (distance < 0) {
+        clearInterval(deadlineInterval);
+        banner.className = "deadline-banner closed";
+        title.textContent = "DEADLINE REACHED";
+        clock.textContent = `Ended: ${deadlineText}`;
+        submitBtn.disabled = true;
+        submitBtn.textContent = "DEADLINE PASSED";
+      } else {
+        banner.className = "deadline-banner open";
+        title.textContent = `SUBMISSION OPEN — DUE: ${deadlineText}`;
+
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        let timeStr = "";
+        if (days > 0) timeStr += `${days}d `;
+        timeStr += `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+
+        clock.textContent = `Time remaining: ${timeStr}`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = "SUBMIT REPORT";
+      }
+    };
+
+    tick(); // run immediately
+    deadlineInterval = setInterval(tick, 1000);
+  } else {
+    // Open indefinitely walang deadline set
+    banner.className = "deadline-banner open";
+    title.textContent = "SUBMISSIONS ARE OPEN";
+    clock.textContent = "No deadline restriction set.";
+    submitBtn.disabled = false;
+    submitBtn.textContent = "SUBMIT REPORT";
+  }
+}
+
 function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallback) {
   const input = document.getElementById(inputId);
   const dropdown = document.getElementById(dropdownId);
@@ -167,7 +299,7 @@ function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallbac
 
   input.addEventListener("input", function() {
     const query = this.value.toLowerCase().trim();
-    hiddenValid.value = ""; // I-invalidate muna kapag nagbago ang tinype
+    hiddenValid.value = "";
     
     if (!query) {
       dropdown.style.display = "none";
@@ -175,7 +307,6 @@ function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallbac
     }
 
     const filtered = students.filter(s => s.name.toLowerCase().includes(query));
-    
     if (filtered.length === 0) {
       dropdown.style.display = "none";
       return;
@@ -189,13 +320,12 @@ function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallbac
 
     dropdown.style.display = "block";
 
-    // Click event para sa items sa dropdown
     dropdown.querySelectorAll(".dropdown-item").forEach(item => {
       mousedownOrClick(item, () => {
         const name = item.getAttribute("data-name");
         const section = item.getAttribute("data-section");
         input.value = name;
-        hiddenValid.value = name; // I-set na valid ang pangalan
+        hiddenValid.value = name;
         dropdown.style.display = "none";
 
         const matchedStudent = students.find(s => s.name === name);
@@ -211,25 +341,16 @@ function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallbac
   });
 
   input.addEventListener("blur", function() {
-    // Bigyan ng konting oras para mag-click muna ang user bago mawala ang dropdown
     setTimeout(() => { dropdown.style.display = "none"; }, 200);
-    // Kung ang tinype ay wala sa listahan, i-clear ang input para bawal ang gawa-gawang pangalan
     if (input.value !== hiddenValid.value) {
       hiddenValid.value = "";
     }
   });
 }
 
-// Helper para mabilis mag-register ng click/touch sa mobile at desktop
 function mousedownOrClick(element, callback) {
-  element.addEventListener("mousedown", (e) => {
-    e.preventDefault(); // Iwasan mawala ang focus agad
-    callback();
-  });
-  element.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    callback();
-  });
+  element.addEventListener("mousedown", (e) => { e.preventDefault(); callback(); });
+  element.addEventListener("touchstart", (e) => { e.preventDefault(); callback(); });
 }
 
 function switchTab(tab, ev) {
@@ -244,7 +365,7 @@ document.getElementById("submissionForm").addEventListener("submit", async funct
   
   const validName = document.getElementById("selectedValidName").value;
   if (!validName) {
-    alert("Please select a valid name from the dropdown list. You cannot enter a name that is not in the list.");
+    alert("Please select a valid name from the dropdown list.");
     document.getElementById("name").focus();
     return;
   }
@@ -285,9 +406,7 @@ document.getElementById("submissionForm").addEventListener("submit", async funct
 
 function copyCode() {
   const code = document.getElementById("codeValue").textContent;
-  navigator.clipboard.writeText(code).then(() => {
-    alert("Code copied: " + code);
-  });
+  navigator.clipboard.writeText(code).then(() => { alert("Code copied: " + code); });
 }
 
 async function checkStatus() {
@@ -295,7 +414,7 @@ async function checkStatus() {
   const code = document.getElementById("checkCode").value.trim();
 
   if (!name || !code) {
-    alert("Please select a valid name from the dropdown and enter your access code.");
+    alert("Please select a valid name and enter your access code.");
     return;
   }
 
@@ -348,7 +467,7 @@ function escapeHtml(v) {
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 
-loadStudents();
+loadPortalData();
 </script>
 </body>
 </html>
