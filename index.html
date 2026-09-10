@@ -45,6 +45,7 @@
     padding: 16px;
     margin-bottom: 24px;
     text-align: center;
+    transition: all 0.3s ease;
   }
   .deadline-banner.open {
     background: #f0fdf4;
@@ -67,6 +68,35 @@
     font-size: 18px;
     font-weight: 800;
   }
+  /* Live sync indicator */
+  .sync-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 8px;
+    font-weight: 600;
+  }
+  .sync-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .sync-dot.syncing {
+    background: #f59e0b;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 </style>
 </head>
 <body>
@@ -82,6 +112,10 @@
     <div id="deadlineBanner" class="deadline-banner">
       <div class="deadline-title" id="deadlineTitle">Checking submission status...</div>
       <div class="deadline-clock" id="deadlineClock">—</div>
+      <div class="sync-indicator" id="syncIndicator" style="display:none">
+        <span class="sync-dot" id="syncDot"></span>
+        <span id="syncText">Live sync active</span>
+      </div>
     </div>
 
     <div class="tabs">
@@ -157,9 +191,13 @@
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby98QvlSPYEW8UMBwOtJGeBa9y2Vfjpnzvua_KQn0Ud2jodU9iFgvIDjaORb7nSpd8d/exec";
 let students = [];
 let deadlineInterval = null;
+let pollInterval = null;
+let lastSettingsSignature = "";
+
+// Sync status indicator
+let syncInFlight = false;
 
 async function loadPortalData() {
-  // Instant load galing localStorage cache kung meron man para mabilis
   const cachedStudents = localStorage.getItem("cachedStudents");
   if (cachedStudents) {
     students = JSON.parse(cachedStudents);
@@ -167,19 +205,101 @@ async function loadPortalData() {
   }
 
   try {
-    const res = await fetch(SCRIPT_URL + "?action=portalData");
-    const data = await res.json();
-    
-    students = data.students;
-    students.sort((a, b) => a.name.localeCompare(b.name));
-    localStorage.setItem("cachedStudents", JSON.stringify(students));
-    
-    populateDropdowns();
-    updateDeadlineUI(data.settings);
+    await fetchAndApplySettings(true);
   } catch (e) {
     console.error("Failed to load portal data", e);
+    const banner = document.getElementById("deadlineBanner");
+    const title = document.getElementById("deadlineTitle");
+    const clock = document.getElementById("deadlineClock");
+    banner.className = "deadline-banner closed";
+    title.textContent = "PORTAL STATUS UNAVAILABLE";
+    clock.textContent = "Please refresh the page or contact your instructor.";
   }
 }
+
+async function fetchAndApplySettings(isInitial = false) {
+  if (syncInFlight) return;
+  syncInFlight = true;
+  setSyncState("syncing");
+
+  try {
+    const res = await fetch(SCRIPT_URL + "?action=portalData&t=" + Date.now());
+    const data = await res.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Failed to load portal data");
+    }
+
+    // Students
+    if (isInitial) {
+      students = data.students || [];
+      students.sort((a, b) => a.name.localeCompare(b.name));
+      localStorage.setItem("cachedStudents", JSON.stringify(students));
+      populateDropdowns();
+    } else if (data.students) {
+      const incoming = JSON.stringify(data.students);
+      const existing = JSON.stringify(students);
+      if (incoming !== existing) {
+        students = data.students;
+        students.sort((a, b) => a.name.localeCompare(b.name));
+        localStorage.setItem("cachedStudents", JSON.stringify(students));
+        populateDropdowns();
+      }
+    }
+
+    // Settings — i-check kung nagbago bago i-apply para hindi mag-reset ng interval
+    const settings = data.settings || {};
+    const signature = JSON.stringify(settings);
+    if (signature !== lastSettingsSignature) {
+      lastSettingsSignature = signature;
+      updateDeadlineUI(settings);
+    }
+
+    setSyncState("ok");
+  } catch (e) {
+    console.error("Settings sync failed", e);
+    setSyncState("error");
+    throw e;
+  } finally {
+    syncInFlight = false;
+  }
+}
+
+function setSyncState(state) {
+  const indicator = document.getElementById("syncIndicator");
+  const dot = document.getElementById("syncDot");
+  const text = document.getElementById("syncText");
+
+  indicator.style.display = "inline-flex";
+
+  if (state === "syncing") {
+    dot.classList.add("syncing");
+    text.textContent = "Checking for updates...";
+  } else if (state === "ok") {
+    dot.classList.remove("syncing");
+    text.textContent = "Live sync active";
+  } else {
+    dot.classList.remove("syncing");
+    dot.style.background = "#ef4444";
+    text.textContent = "Sync failed — retrying...";
+  }
+}
+
+// Poll every 30 seconds — kapag hidden ang tab, skip muna
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(() => {
+    if (document.hidden) return;
+    fetchAndApplySettings(false).catch(() => {});
+  }, 30000); // 30 seconds
+}
+
+// Kapag bumalik ang user sa tab, mag-fetch agad
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    fetchAndApplySettings(false).catch(() => {});
+  }
+});
 
 function populateDropdowns() {
   const sections = [...new Set(students.map(s => s.section))].sort();
@@ -195,17 +315,13 @@ function populateDropdowns() {
   setupCustomDropdown("checkName", "checkNameDropdown", "selectedCheckValidName", null);
 }
 
-
 function parseDeadline(deadlineStr) {
-  // Handle both "2025-01-15T14:30" and "2025-01-15T14:30:00" and ISO strings
   if (!deadlineStr) return null;
   let str = String(deadlineStr).trim();
-  // If it's already a full ISO string with Z or offset, use as-is
   if (/Z$|[+-]\d{2}:?\d{2}$/.test(str)) {
     const d = new Date(str);
     return isNaN(d.getTime()) ? null : d;
   }
-  // Otherwise treat as local datetime-local value
   const d = new Date(str);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -224,7 +340,10 @@ function updateDeadlineUI(settings) {
   const clock = document.getElementById("deadlineClock");
   const submitBtn = document.getElementById("submitBtn");
 
-  if (deadlineInterval) clearInterval(deadlineInterval);
+  if (deadlineInterval) {
+    clearInterval(deadlineInterval);
+    deadlineInterval = null;
+  }
 
   if (settings.status === "closed") {
     banner.className = "deadline-banner closed";
@@ -235,7 +354,6 @@ function updateDeadlineUI(settings) {
     return;
   }
 
-  // Kung may deadline time na naka-set
   if (settings.deadline) {
     const deadlineDate = parseDeadline(settings.deadline);
     if (!deadlineDate) {
@@ -256,11 +374,14 @@ function updateDeadlineUI(settings) {
 
       if (distance < 0) {
         clearInterval(deadlineInterval);
+        deadlineInterval = null;
         banner.className = "deadline-banner closed";
         title.textContent = "DEADLINE REACHED";
         clock.textContent = `Ended: ${deadlineText}`;
         submitBtn.disabled = true;
         submitBtn.textContent = "DEADLINE PASSED";
+        // I-trigger agad ang server re-check pag na-reach ang deadline
+        fetchAndApplySettings(false).catch(() => {});
       } else {
         banner.className = "deadline-banner open";
         title.textContent = `SUBMISSION OPEN — DUE: ${deadlineText}`;
@@ -280,10 +401,9 @@ function updateDeadlineUI(settings) {
       }
     };
 
-    tick(); // run immediately
+    tick();
     deadlineInterval = setInterval(tick, 1000);
   } else {
-    // Open indefinitely walang deadline set
     banner.className = "deadline-banner open";
     title.textContent = "SUBMISSIONS ARE OPEN";
     clock.textContent = "No deadline restriction set.";
@@ -297,10 +417,15 @@ function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallbac
   const dropdown = document.getElementById(dropdownId);
   const hiddenValid = document.getElementById(hiddenValidId);
 
-  input.addEventListener("input", function() {
+  // Iwasan ang double listeners kapag paulit-ulit na-populate
+  const newInput = input.cloneNode(true);
+  input.parentNode.replaceChild(newInput, input);
+  const freshInput = document.getElementById(inputId);
+
+  freshInput.addEventListener("input", function() {
     const query = this.value.toLowerCase().trim();
     hiddenValid.value = "";
-    
+
     if (!query) {
       dropdown.style.display = "none";
       return;
@@ -324,7 +449,7 @@ function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallbac
       mousedownOrClick(item, () => {
         const name = item.getAttribute("data-name");
         const section = item.getAttribute("data-section");
-        input.value = name;
+        freshInput.value = name;
         hiddenValid.value = name;
         dropdown.style.display = "none";
 
@@ -334,15 +459,15 @@ function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallbac
     });
   });
 
-  input.addEventListener("focus", function() {
+  freshInput.addEventListener("focus", function() {
     if (this.value.trim() && dropdown.children.length > 0) {
       dropdown.style.display = "block";
     }
   });
 
-  input.addEventListener("blur", function() {
+  freshInput.addEventListener("blur", function() {
     setTimeout(() => { dropdown.style.display = "none"; }, 200);
-    if (input.value !== hiddenValid.value) {
+    if (freshInput.value !== hiddenValid.value) {
       hiddenValid.value = "";
     }
   });
@@ -362,7 +487,7 @@ function switchTab(tab, ev) {
 
 document.getElementById("submissionForm").addEventListener("submit", async function(e) {
   e.preventDefault();
-  
+
   const validName = document.getElementById("selectedValidName").value;
   if (!validName) {
     alert("Please select a valid name from the dropdown list.");
@@ -396,12 +521,24 @@ document.getElementById("submissionForm").addEventListener("submit", async funct
       showMessage("Submission received successfully!", "success");
     } else {
       showMessage(result.message, "error");
+      // Kung closed na ang portal sa server, i-refresh ang settings agad
+      if (String(result.message).toLowerCase().includes("closed")) {
+        fetchAndApplySettings(false).catch(() => {});
+      }
     }
   } catch (error) {
     showMessage("Submission failed. Please try again.", "error");
   }
 
-  btn.disabled = false; btn.textContent = "SUBMIT REPORT";
+  // Ibalik ang button base sa latest settings state
+  const banner = document.getElementById("deadlineBanner");
+  if (banner.classList.contains("closed")) {
+    btn.disabled = true;
+    btn.textContent = "PORTAL CLOSED";
+  } else {
+    btn.disabled = false;
+    btn.textContent = "SUBMIT REPORT";
+  }
 });
 
 function copyCode() {
@@ -467,7 +604,9 @@ function escapeHtml(v) {
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 
+// ===== INIT =====
 loadPortalData();
+startPolling();
 </script>
 </body>
 </html>
