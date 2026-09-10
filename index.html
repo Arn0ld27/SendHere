@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Submission Portal</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <div class="logo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+    </div>
+    <h1>Student Submission Portal</h1>
+    <p class="subtitle">Submit your Google Drive link</p>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('submit', event)">Submit</button>
+      <button class="tab" onclick="switchTab('status', event)">Check Status</button>
+    </div>
+
+    <!-- SUBMIT TAB -->
+    <div id="submitTab">
+      <form id="submissionForm">
+        <label for="name">Student Name</label>
+        <input id="name" list="nameList" type="text" placeholder="Type or select your name" required autocomplete="off">
+        <datalist id="nameList"></datalist>
+
+        <label for="section">Section</label>
+        <select id="section" required>
+          <option value="">-- Select Section --</option>
+        </select>
+
+        <label for="link">Google Drive Link</label>
+        <input id="link" type="url" placeholder="https://drive.google.com/..." required>
+
+        <button type="submit" id="submitBtn">SUBMIT REPORT</button>
+      </form>
+
+      <div id="message" class="message"></div>
+
+      <div id="codeBox" class="code-box" style="display:none">
+        <div class="code-success-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>
+          Submission Received
+        </div>
+        <div class="code-title">ACCESS CODE</div>
+        <div class="code-value-wrap">
+          <div class="code-value" id="codeValue">—</div>
+          <button class="copy-btn" onclick="copyCode()" title="Copy code">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy
+          </button>
+        </div>
+        <div class="code-warning">
+          <strong>Save this code.</strong> You will need it to check your score. Do not share it with anyone.
+        </div>
+        <div class="code-tip">Tip: Screenshot this or write it down before leaving this page.</div>
+      </div>
+
+      <p class="note">Make sure your Google Drive file is accessible to the instructor.</p>
+    </div>
+
+    <!-- STATUS TAB -->
+    <div id="statusTab" style="display:none">
+      <label for="checkName">Student Name</label>
+      <input id="checkName" list="nameList2" type="text" placeholder="Type your name" required autocomplete="off">
+      <datalist id="nameList2"></datalist>
+
+      <label for="checkCode">Access Code</label>
+      <input id="checkCode" type="text" placeholder="e.g. JD-4821-KX" required style="text-transform:uppercase">
+
+      <button type="button" onclick="checkStatus()" id="checkBtn">CHECK STATUS</button>
+
+      <div id="statusResult" class="status-box" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby98QvlSPYEW8UMBwOtJGeBa9y2Vfjpnzvua_KQn0Ud2jodU9iFgvIDjaORb7nSpd8d/exec";
+let students = [];
+
+async function loadStudents() {
+  try {
+    const res = await fetch(SCRIPT_URL + "?action=students");
+    students = await res.json();
+
+    const names = [...new Set(students.map(s => s.name))].sort();
+    const sections = [...new Set(students.map(s => s.section))].sort();
+
+    const nameOpts = names.map(n => `<option value="${escapeHtml(n)}">`).join("");
+    document.getElementById("nameList").innerHTML = nameOpts;
+    document.getElementById("nameList2").innerHTML = nameOpts;
+
+    const secOpts = sections.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+    document.getElementById("section").innerHTML = '<option value="">-- Select Section --</option>' + secOpts;
+
+    document.getElementById("name").addEventListener("change", autoFillSection);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function autoFillSection() {
+  const name = document.getElementById("name").value.trim();
+  const match = students.find(s => s.name.toLowerCase() === name.toLowerCase());
+  if (match) document.getElementById("section").value = match.section;
+}
+
+function switchTab(tab, ev) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  if (ev) ev.target.classList.add("active");
+  document.getElementById("submitTab").style.display = tab === "submit" ? "block" : "none";
+  document.getElementById("statusTab").style.display = tab === "status" ? "block" : "none";
+}
+
+document.getElementById("submissionForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true; btn.textContent = "SUBMITTING...";
+
+  const data = {
+    action: "submit",
+    name: document.getElementById("name").value.trim(),
+    section: document.getElementById("section").value,
+    link: document.getElementById("link").value.trim()
+  };
+
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      document.getElementById("submissionForm").reset();
+      document.getElementById("codeValue").textContent = result.code;
+      document.getElementById("codeBox").style.display = "block";
+      showMessage("Submission received successfully!", "success");
+    } else {
+      showMessage(result.message, "error");
+    }
+  } catch (error) {
+    showMessage("Submission failed. Please try again.", "error");
+  }
+
+  btn.disabled = false; btn.textContent = "SUBMIT REPORT";
+});
+
+function copyCode() {
+  const code = document.getElementById("codeValue").textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    alert("Code copied: " + code);
+  });
+}
+
+async function checkStatus() {
+  const name = document.getElementById("checkName").value.trim();
+  const code = document.getElementById("checkCode").value.trim();
+
+  if (!name || !code) {
+    alert("Please enter your name and access code.");
+    return;
+  }
+
+  const btn = document.getElementById("checkBtn");
+  btn.disabled = true; btn.textContent = "CHECKING...";
+
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({action: "checkStatus", name, code})
+    });
+    const result = await res.json();
+    const box = document.getElementById("statusResult");
+    box.style.display = "block";
+
+    if (!result.success) {
+      box.className = "status-box error";
+      box.innerHTML = escapeHtml(result.message);
+    } else if (result.status === "Approved") {
+      box.className = "status-box approved";
+      box.innerHTML = `
+        <div class="status-title">APPROVED</div>
+        <div class="status-score">Score: <strong>${escapeHtml(result.score)}</strong></div>
+        <div class="status-date">Submitted: ${escapeHtml(result.date)}</div>
+      `;
+    } else {
+      box.className = "status-box pending";
+      box.innerHTML = `
+        <div class="status-title">PENDING</div>
+        <div class="status-date">Submitted: ${escapeHtml(result.date)}</div>
+        <div class="status-note">Waiting for instructor approval.</div>
+      `;
+    }
+  } catch (e) {
+    alert("Failed to check status.");
+  }
+
+  btn.disabled = false; btn.textContent = "CHECK STATUS";
+}
+
+function showMessage(text, type) {
+  const msg = document.getElementById("message");
+  msg.textContent = text;
+  msg.className = "message " + type;
+}
+
+function escapeHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+
+loadStudents();
+</script>
+</body>
+</html>
