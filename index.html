@@ -6,97 +6,107 @@
 <title>Student Submission Portal</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  .autocomplete-wrapper {
-    position: relative;
-    width: 100%;
-  }
+  .autocomplete-wrapper { position: relative; width: 100%; }
   .dropdown-list {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: #fff;
-    border: 1.5px solid #e2e8f0;
-    border-top: none;
-    border-radius: 0 0 12px 12px;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 99;
-    display: none;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #fff; border: 1.5px solid #e2e8f0; border-top: none;
+    border-radius: 0 0 12px 12px; max-height: 200px; overflow-y: auto;
+    z-index: 99; display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   }
   .dropdown-item {
-    padding: 12px 16px;
-    cursor: pointer;
-    font-size: 15px;
-    color: #0f172a;
-    border-bottom: 1px solid #f1f5f9;
+    padding: 12px 16px; cursor: pointer; font-size: 15px;
+    color: #0f172a; border-bottom: 1px solid #f1f5f9;
   }
   .dropdown-item:hover, .dropdown-item.selected {
-    background: #eef2ff;
-    color: #4f46e5;
-    font-weight: 600;
+    background: #eef2ff; color: #4f46e5; font-weight: 600;
   }
-  /* Deadline Timer Banner */
   .deadline-banner {
-    background: #f8fafc;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 16px;
-    margin-bottom: 24px;
-    text-align: center;
-    transition: all 0.3s ease;
+    background: #f8fafc; border: 1.5px solid #e2e8f0;
+    border-radius: 14px; padding: 16px; margin-bottom: 24px;
+    text-align: center; transition: all 0.3s ease;
   }
-  .deadline-banner.open {
-    background: #f0fdf4;
-    border-color: #bbf7d0;
-    color: #166534;
-  }
-  .deadline-banner.closed {
-    background: #fef2f2;
-    border-color: #fecaca;
-    color: #991b1b;
-  }
+  .deadline-banner.open { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+  .deadline-banner.closed { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
   .deadline-title {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 4px;
+    font-size: 12px; font-weight: 800; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 4px;
   }
-  .deadline-clock {
-    font-size: 18px;
-    font-weight: 800;
-  }
-  /* Live sync indicator */
+  .deadline-clock { font-size: 18px; font-weight: 800; }
   .sync-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: #94a3b8;
-    margin-top: 8px;
-    font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #94a3b8; margin-top: 8px; font-weight: 600;
   }
   .sync-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #22c55e;
-    animation: pulse 2s infinite;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #22c55e; animation: pulse 2s infinite;
   }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .sync-dot.syncing { background: #f59e0b; animation: spin 1s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ===== MODAL POPUP ===== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px); display: flex; align-items: center;
+    justify-content: center; z-index: 9999; padding: 20px;
+    animation: fadeIn 0.2s ease;
   }
-  .sync-dot.syncing {
-    background: #f59e0b;
-    animation: spin 1s linear infinite;
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal-box {
+    background: #fff; border-radius: 20px; max-width: 440px; width: 100%;
+    padding: 32px 28px; text-align: center; position: relative;
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+    animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.9) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
   }
+  .modal-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 18px; font-size: 32px;
+  }
+  .modal-icon.warning { background: #fef3c7; color: #d97706; }
+  .modal-icon.success { background: #dcfce7; color: #16a34a; }
+  .modal-icon.error { background: #fee2e2; color: #dc2626; }
+  .modal-title {
+    font-size: 20px; font-weight: 800; color: #0f172a;
+    margin-bottom: 8px; letter-spacing: -0.3px;
+  }
+  .modal-text {
+    font-size: 14px; color: #475569; line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .modal-text strong { color: #0f172a; }
+  .modal-btn {
+    width: 100%; padding: 14px; border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: #fff; font-weight: 700; font-size: 14px;
+    border: 0; cursor: pointer;
+    box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
+    transition: all 0.2s ease;
+  }
+  .modal-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 24px -5px rgba(99, 102, 241, 0.5); }
+  .modal-btn.secondary {
+    background: #f1f5f9; color: #334155; box-shadow: none;
+    margin-top: 10px;
+  }
+  .modal-btn.secondary:hover { background: #e2e8f0; }
+
+  /* Reminder list sa loob ng modal */
+  .reminder-list {
+    text-align: left; background: #f8fafc; border: 1.5px solid #e2e8f0;
+    border-radius: 12px; padding: 16px; margin-bottom: 18px;
+    font-size: 13.5px; color: #334155; line-height: 1.7;
+  }
+  .reminder-list .reminder-title {
+    font-weight: 800; font-size: 12px; letter-spacing: 0.8px;
+    text-transform: uppercase; color: #4f46e5; margin-bottom: 8px;
+  }
+  .reminder-list ol { margin: 0; padding-left: 20px; }
+  .reminder-list li { margin-bottom: 6px; }
+  .reminder-list li:last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -187,23 +197,58 @@
   </div>
 </div>
 
+<!-- MODAL CONTAINER -->
+<div id="modalRoot"></div>
+
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby98QvlSPYEW8UMBwOtJGeBa9y2Vfjpnzvua_KQn0Ud2jodU9iFgvIDjaORb7nSpd8d/exec";
-let students = []; 
+let students = [];
 let deadlineInterval = null;
 let pollInterval = null;
 let lastSettingsSignature = "";
-
-// Sync status indicator
 let syncInFlight = false;
 
+// ===== MODAL HELPERS =====
+function showModal({ icon = "⚠️", iconType = "warning", title, text, extraHtml = "", primaryText = "OK", onPrimary = null, secondaryText = null, onSecondary = null }) {
+  const root = document.getElementById("modalRoot");
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-icon ${iconType}">${icon}</div>
+      <div class="modal-title">${title}</div>
+      <div class="modal-text">${text}</div>
+      ${extraHtml}
+      <button class="modal-btn" id="modalPrimary">${primaryText}</button>
+      ${secondaryText ? `<button class="modal-btn secondary" id="modalSecondary">${secondaryText}</button>` : ""}
+    </div>
+  `;
+  root.appendChild(overlay);
+
+  const close = () => overlay.remove();
+
+  overlay.querySelector("#modalPrimary").addEventListener("click", () => {
+    if (onPrimary) onPrimary();
+    close();
+  });
+  if (secondaryText) {
+    overlay.querySelector("#modalSecondary").addEventListener("click", () => {
+      if (onSecondary) onSecondary();
+      close();
+    });
+  }
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+}
+
+// ===== DATA LOADING =====
 async function loadPortalData() {
   const cachedStudents = localStorage.getItem("cachedStudents");
   if (cachedStudents) {
     students = JSON.parse(cachedStudents);
     populateDropdowns();
   }
-
   try {
     await fetchAndApplySettings(true);
   } catch (e) {
@@ -221,16 +266,11 @@ async function fetchAndApplySettings(isInitial = false) {
   if (syncInFlight) return;
   syncInFlight = true;
   setSyncState("syncing");
-
   try {
     const res = await fetch(SCRIPT_URL + "?action=portalData&t=" + Date.now());
     const data = await res.json();
+    if (!data.success) throw new Error(data.message || "Failed to load portal data");
 
-    if (!data.success) {
-      throw new Error(data.message || "Failed to load portal data");
-    }
-
-    // Students
     if (isInitial) {
       students = data.students || [];
       students.sort((a, b) => a.name.localeCompare(b.name));
@@ -247,14 +287,12 @@ async function fetchAndApplySettings(isInitial = false) {
       }
     }
 
-    // Settings — i-check kung nagbago bago i-apply para hindi mag-reset ng interval
     const settings = data.settings || {};
     const signature = JSON.stringify(settings);
     if (signature !== lastSettingsSignature) {
       lastSettingsSignature = signature;
       updateDeadlineUI(settings);
     }
-
     setSyncState("ok");
   } catch (e) {
     console.error("Settings sync failed", e);
@@ -269,14 +307,13 @@ function setSyncState(state) {
   const indicator = document.getElementById("syncIndicator");
   const dot = document.getElementById("syncDot");
   const text = document.getElementById("syncText");
-
   indicator.style.display = "inline-flex";
-
   if (state === "syncing") {
     dot.classList.add("syncing");
     text.textContent = "Checking for updates...";
   } else if (state === "ok") {
     dot.classList.remove("syncing");
+    dot.style.background = "#22c55e";
     text.textContent = "Live sync active";
   } else {
     dot.classList.remove("syncing");
@@ -285,22 +322,20 @@ function setSyncState(state) {
   }
 }
 
-// Poll every 30 seconds — kapag hidden ang tab, skip muna
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = setInterval(() => {
     if (document.hidden) return;
     fetchAndApplySettings(false).catch(() => {});
-  }, 30000); // 30 seconds
+  }, 30000);
 }
 
-// Kapag bumalik ang user sa tab, mag-fetch agad
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    fetchAndApplySettings(false).catch(() => {});
-  }
+  if (!document.hidden) fetchAndApplySettings(false).catch(() => {});
 });
+window.addEventListener("focus", () => fetchAndApplySettings(false).catch(() => {}));
 
+// ===== DROPDOWNS =====
 function populateDropdowns() {
   const sections = [...new Set(students.map(s => s.section))].sort();
   const secOpts = sections.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
@@ -311,10 +346,67 @@ function populateDropdowns() {
       document.getElementById("section").value = selectedStudent.section;
     }
   });
-
   setupCustomDropdown("checkName", "checkNameDropdown", "selectedCheckValidName", null);
 }
 
+function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallback) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const hiddenValid = document.getElementById(hiddenValidId);
+
+  const newInput = input.cloneNode(true);
+  input.parentNode.replaceChild(newInput, input);
+  const freshInput = document.getElementById(inputId);
+
+  freshInput.addEventListener("input", function() {
+    const query = this.value.toLowerCase().trim();
+    hiddenValid.value = "";
+    if (!query) { dropdown.style.display = "none"; return; }
+    const filtered = students.filter(s => s.name.toLowerCase().includes(query));
+    if (filtered.length === 0) { dropdown.style.display = "none"; return; }
+
+    dropdown.innerHTML = filtered.map(s => `
+      <div class="dropdown-item" data-name="${escapeHtml(s.name)}" data-section="${escapeHtml(s.section)}">
+        ${escapeHtml(s.name)} <span style="color:#64748b; font-size:12px;">(${escapeHtml(s.section)})</span>
+      </div>
+    `).join("");
+    dropdown.style.display = "block";
+
+    dropdown.querySelectorAll(".dropdown-item").forEach(item => {
+      mousedownOrClick(item, () => {
+        const name = item.getAttribute("data-name");
+        const section = item.getAttribute("data-section");
+        freshInput.value = name;
+        hiddenValid.value = name;
+        dropdown.style.display = "none";
+        const matchedStudent = students.find(s => s.name === name);
+        if (onSelectCallback) onSelectCallback(matchedStudent);
+      });
+    });
+  });
+
+  freshInput.addEventListener("focus", function() {
+    if (this.value.trim() && dropdown.children.length > 0) dropdown.style.display = "block";
+  });
+  freshInput.addEventListener("blur", function() {
+    setTimeout(() => { dropdown.style.display = "none"; }, 200);
+    if (freshInput.value !== hiddenValid.value) hiddenValid.value = "";
+  });
+}
+
+function mousedownOrClick(element, callback) {
+  element.addEventListener("mousedown", (e) => { e.preventDefault(); callback(); });
+  element.addEventListener("touchstart", (e) => { e.preventDefault(); callback(); });
+}
+
+function switchTab(tab, ev) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  if (ev) ev.target.classList.add("active");
+  document.getElementById("submitTab").style.display = tab === "submit" ? "block" : "none";
+  document.getElementById("statusTab").style.display = tab === "status" ? "block" : "none";
+}
+
+// ===== DEADLINE UI =====
 function parseDeadline(deadlineStr) {
   if (!deadlineStr) return null;
   let str = String(deadlineStr).trim();
@@ -327,11 +419,10 @@ function parseDeadline(deadlineStr) {
 }
 
 function formatDeadlineDisplay(date) {
-  const opts = {
+  return date.toLocaleString(undefined, {
     weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: true
-  };
-  return date.toLocaleString(undefined, opts);
+  });
 }
 
 function updateDeadlineUI(settings) {
@@ -340,10 +431,7 @@ function updateDeadlineUI(settings) {
   const clock = document.getElementById("deadlineClock");
   const submitBtn = document.getElementById("submitBtn");
 
-  if (deadlineInterval) {
-    clearInterval(deadlineInterval);
-    deadlineInterval = null;
-  }
+  if (deadlineInterval) { clearInterval(deadlineInterval); deadlineInterval = null; }
 
   if (settings.status === "closed") {
     banner.className = "deadline-banner closed";
@@ -364,14 +452,12 @@ function updateDeadlineUI(settings) {
       submitBtn.textContent = "SUBMIT REPORT";
       return;
     }
-
     const deadlineTime = deadlineDate.getTime();
     const deadlineText = formatDeadlineDisplay(deadlineDate);
 
     const tick = () => {
       const now = Date.now();
       const distance = deadlineTime - now;
-
       if (distance < 0) {
         clearInterval(deadlineInterval);
         deadlineInterval = null;
@@ -380,27 +466,22 @@ function updateDeadlineUI(settings) {
         clock.textContent = `Ended: ${deadlineText}`;
         submitBtn.disabled = true;
         submitBtn.textContent = "DEADLINE PASSED";
-        // I-trigger agad ang server re-check pag na-reach ang deadline
         fetchAndApplySettings(false).catch(() => {});
       } else {
         banner.className = "deadline-banner open";
         title.textContent = `SUBMISSION OPEN — DUE: ${deadlineText}`;
-
         const days = Math.floor(distance / (1000 * 60 * 60 * 24));
         const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
         let timeStr = "";
         if (days > 0) timeStr += `${days}d `;
         timeStr += `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
-
         clock.textContent = `Time remaining: ${timeStr}`;
         submitBtn.disabled = false;
         submitBtn.textContent = "SUBMIT REPORT";
       }
     };
-
     tick();
     deadlineInterval = setInterval(tick, 1000);
   } else {
@@ -412,86 +493,19 @@ function updateDeadlineUI(settings) {
   }
 }
 
-function setupCustomDropdown(inputId, dropdownId, hiddenValidId, onSelectCallback) {
-  const input = document.getElementById(inputId);
-  const dropdown = document.getElementById(dropdownId);
-  const hiddenValid = document.getElementById(hiddenValidId);
-
-  // Iwasan ang double listeners kapag paulit-ulit na-populate
-  const newInput = input.cloneNode(true);
-  input.parentNode.replaceChild(newInput, input);
-  const freshInput = document.getElementById(inputId);
-
-  freshInput.addEventListener("input", function() {
-    const query = this.value.toLowerCase().trim();
-    hiddenValid.value = "";
-
-    if (!query) {
-      dropdown.style.display = "none";
-      return;
-    }
-
-    const filtered = students.filter(s => s.name.toLowerCase().includes(query));
-    if (filtered.length === 0) {
-      dropdown.style.display = "none";
-      return;
-    }
-
-    dropdown.innerHTML = filtered.map(s => `
-      <div class="dropdown-item" data-name="${escapeHtml(s.name)}" data-section="${escapeHtml(s.section)}">
-        ${escapeHtml(s.name)} <span style="color:#64748b; font-size:12px;">(${escapeHtml(s.section)})</span>
-      </div>
-    `).join("");
-
-    dropdown.style.display = "block";
-
-    dropdown.querySelectorAll(".dropdown-item").forEach(item => {
-      mousedownOrClick(item, () => {
-        const name = item.getAttribute("data-name");
-        const section = item.getAttribute("data-section");
-        freshInput.value = name;
-        hiddenValid.value = name;
-        dropdown.style.display = "none";
-
-        const matchedStudent = students.find(s => s.name === name);
-        if (onSelectCallback) onSelectCallback(matchedStudent);
-      });
-    });
-  });
-
-  freshInput.addEventListener("focus", function() {
-    if (this.value.trim() && dropdown.children.length > 0) {
-      dropdown.style.display = "block";
-    }
-  });
-
-  freshInput.addEventListener("blur", function() {
-    setTimeout(() => { dropdown.style.display = "none"; }, 200);
-    if (freshInput.value !== hiddenValid.value) {
-      hiddenValid.value = "";
-    }
-  });
-}
-
-function mousedownOrClick(element, callback) {
-  element.addEventListener("mousedown", (e) => { e.preventDefault(); callback(); });
-  element.addEventListener("touchstart", (e) => { e.preventDefault(); callback(); });
-}
-
-function switchTab(tab, ev) {
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  if (ev) ev.target.classList.add("active");
-  document.getElementById("submitTab").style.display = tab === "submit" ? "block" : "none";
-  document.getElementById("statusTab").style.display = tab === "status" ? "block" : "none";
-}
-
+// ===== FORM SUBMIT =====
 document.getElementById("submissionForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
   const validName = document.getElementById("selectedValidName").value;
   if (!validName) {
-    alert("Please select a valid name from the dropdown list.");
-    document.getElementById("name").focus();
+    showModal({
+      icon: "⚠️", iconType: "warning",
+      title: "Select your name",
+      text: "Please choose your name from the dropdown list before submitting.",
+      primaryText: "OK",
+      onPrimary: () => document.getElementById("name").focus()
+    });
     return;
   }
 
@@ -519,18 +533,79 @@ document.getElementById("submissionForm").addEventListener("submit", async funct
       document.getElementById("codeValue").textContent = result.code;
       document.getElementById("codeBox").style.display = "block";
       showMessage("Submission received successfully!", "success");
+
+      // ✅ REMINDER POPUP — Google Drive link must be accessible
+      showModal({
+        icon: "✅", iconType: "success",
+        title: "Submission Received!",
+        text: `Your access code is <strong>${escapeHtml(result.code)}</strong>. Save it — you will need it to check your score.`,
+        extraHtml: `
+          <div class="reminder-list">
+            <div class="reminder-title">⚠️ Important Reminder</div>
+            <ol>
+              <li>Make sure your Google Drive file is set to <strong>"Anyone with the link can view"</strong>.</li>
+              <li>If it's set to <strong>"Restricted"</strong>, your instructor <strong>cannot open</strong> your submission and you may receive a failing grade.</li>
+              <li>To fix: Right-click your file → <strong>Share</strong> → Change to <strong>"Anyone with the link"</strong> → <strong>Viewer</strong>.</li>
+              <li>Double-check your link works by opening it in an <strong>incognito/private window</strong>.</li>
+            </ol>
+          </div>
+        `,
+        primaryText: "I Understand",
+        secondaryText: "Copy Access Code",
+        onSecondary: () => {
+          navigator.clipboard.writeText(result.code).then(() => {
+            showModal({
+              icon: "📋", iconType: "success",
+              title: "Code Copied!",
+              text: "Your access code has been copied to clipboard.",
+              primaryText: "OK"
+            });
+          });
+        }
+      });
+    } else if (result.alreadySubmitted) {
+      // ✅ DUPLICATE SUBMISSION — may existing record
+      showModal({
+        icon: "🚫", iconType: "error",
+        title: "Already Submitted",
+        text: "You have already submitted a report. <strong>Only one submission is allowed per student.</strong>",
+        extraHtml: `
+          <div class="reminder-list">
+            <div class="reminder-title">Your Existing Submission</div>
+            <div style="font-size:13px;color:#334155;">
+              <div><strong>Access Code:</strong> <code style="background:#eef2ff;padding:3px 8px;border-radius:6px;color:#4f46e5;font-weight:700;">${escapeHtml(result.existingCode)}</code></div>
+              <div style="margin-top:6px;"><strong>Submitted:</strong> ${escapeHtml(result.existingDate)}</div>
+            </div>
+          </div>
+          <div style="font-size:13px;color:#64748b;margin-bottom:18px;">
+            If you need to change your submission, please contact your instructor directly.
+          </div>
+        `,
+        primaryText: "Go to Check Status",
+        secondaryText: "Close",
+        onPrimary: () => {
+          switchTab("status", { target: document.querySelectorAll(".tab")[1] });
+        }
+      });
     } else {
       showMessage(result.message, "error");
-      // Kung closed na ang portal sa server, i-refresh ang settings agad
-      if (String(result.message).toLowerCase().includes("closed")) {
-        fetchAndApplySettings(false).catch(() => {});
-      }
+      showModal({
+        icon: "❌", iconType: "error",
+        title: "Submission Failed",
+        text: escapeHtml(result.message || "Something went wrong."),
+        primaryText: "OK"
+      });
     }
   } catch (error) {
     showMessage("Submission failed. Please try again.", "error");
+    showModal({
+      icon: "❌", iconType: "error",
+      title: "Connection Error",
+      text: "Submission failed. Please check your internet connection and try again.",
+      primaryText: "OK"
+    });
   }
 
-  // Ibalik ang button base sa latest settings state
   const banner = document.getElementById("deadlineBanner");
   if (banner.classList.contains("closed")) {
     btn.disabled = true;
@@ -543,15 +618,28 @@ document.getElementById("submissionForm").addEventListener("submit", async funct
 
 function copyCode() {
   const code = document.getElementById("codeValue").textContent;
-  navigator.clipboard.writeText(code).then(() => { alert("Code copied: " + code); });
+  navigator.clipboard.writeText(code).then(() => {
+    showModal({
+      icon: "📋", iconType: "success",
+      title: "Code Copied!",
+      text: `Access code <strong>${escapeHtml(code)}</strong> copied to clipboard.`,
+      primaryText: "OK"
+    });
+  });
 }
 
+// ===== CHECK STATUS =====
 async function checkStatus() {
   const name = document.getElementById("selectedCheckValidName").value;
   const code = document.getElementById("checkCode").value.trim();
 
   if (!name || !code) {
-    alert("Please select a valid name and enter your access code.");
+    showModal({
+      icon: "⚠️", iconType: "warning",
+      title: "Missing Information",
+      text: "Please select your name and enter your access code.",
+      primaryText: "OK"
+    });
     return;
   }
 
@@ -587,7 +675,12 @@ async function checkStatus() {
       `;
     }
   } catch (e) {
-    alert("Failed to check status.");
+    showModal({
+      icon: "❌", iconType: "error",
+      title: "Connection Error",
+      text: "Failed to check status. Please try again.",
+      primaryText: "OK"
+    });
   }
 
   btn.disabled = false; btn.textContent = "CHECK STATUS";
