@@ -29,10 +29,23 @@
       <p>View student Google Drive submissions in one place.</p>
     </div>
     <div>
-      <button onclick="loadSubmissions()" class="refresh">Refresh</button>
+      <button onclick="loadDashboardData()" class="refresh">Refresh</button>
       <button onclick="logout()" class="refresh">Logout</button>
     </div>
   </header>
+
+  <!-- DEADLINE & SUBMISSION CONTROLS PANEL -->
+  <div class="toolbar" style="margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+    <div>
+      <h3 style="margin:0 0 4px; font-size:16px;">Portal Control</h3>
+      <p style="margin:0; font-size:13px; color:#64748b;" id="currentStatusText">Loading portal status...</p>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <input type="datetime-local" id="deadlineInput" style="padding:10px; width:auto;">
+      <button onclick="updateSettings('deadline')" style="background:#4f46e5; color:white; padding:10px 16px; font-weight:600;">Set Deadline</button>
+      <button id="toggleBtn" onclick="toggleSubmissionStatus()" style="padding:10px 16px; font-weight:600;"></button>
+    </div>
+  </div>
 
   <section class="stats">
     <div class="stat"><span>Total</span><strong id="total">0</strong></div>
@@ -45,8 +58,8 @@
     <input id="search" type="search" placeholder="Search student name..." oninput="render()" style="flex:1;min-width:200px">
     <select id="sectionFilter" onchange="render()">
       <option value="">All Sections</option>
-      <option value="A">BSCS 3A</option>
-      <option value="B">BSCS 3B</option>
+      <option value="BSCS 2A">BSCS 2A</option>
+      <option value="BSCS 2B">BSCS 2B</option>
     </select>
     <select id="statusFilter" onchange="render()">
       <option value="">All Status</option>
@@ -81,34 +94,26 @@
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby98QvlSPYEW8UMBwOtJGeBa9y2Vfjpnzvua_KQn0Ud2jodU9iFgvIDjaORb7nSpd8d/exec";
 let submissions = [];
 let adminPassword = "";
+let currentSettings = {};
 
-/* ---------- SESSION PERSISTENCE ---------- */
 const SESSION_KEY = "teacherDashboardSession";
 
 function saveSession(password) {
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ password, loggedInAt: Date.now() }));
-  } catch (e) { /* ignore */ }
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ password, loggedInAt: Date.now() })); } catch (e) {}
 }
-
 function getSession() {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
+  try { const raw = sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
 }
-
 function clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
 }
 
-/* ---------- AUTO RESUME ON REFRESH ---------- */
 window.addEventListener("DOMContentLoaded", () => {
   const session = getSession();
   if (session && session.password) {
     adminPassword = session.password;
     showDashboard();
-    loadSubmissions();
+    loadDashboardData();
   } else {
     showLogin();
   }
@@ -118,13 +123,11 @@ function showLogin() {
   document.getElementById("loginScreen").style.display = "flex";
   document.getElementById("dashboardScreen").style.display = "none";
 }
-
 function showDashboard() {
   document.getElementById("loginScreen").style.display = "none";
   document.getElementById("dashboardScreen").style.display = "block";
 }
 
-/* ---------- LOGIN ---------- */
 function login() {
   const pass = document.getElementById("adminPass").value;
   if (!pass) {
@@ -143,9 +146,9 @@ function login() {
   .then(res => {
     if (res.success) {
       adminPassword = pass;
-      saveSession(pass);          // ← remember login
+      saveSession(pass);
       showDashboard();
-      loadSubmissions();
+      loadDashboardData();
     } else {
       const m = document.getElementById("loginMsg");
       m.textContent = res.message;
@@ -154,7 +157,7 @@ function login() {
   })
   .catch(() => {
     const m = document.getElementById("loginMsg");
-    m.textContent = "Connection failed. Check your internet or URL.";
+    m.textContent = "Connection failed.";
     m.className = "message error";
   });
 }
@@ -165,20 +168,82 @@ function logout() {
   location.reload();
 }
 
-/* ---------- LOAD SUBMISSIONS ---------- */
-async function loadSubmissions() {
+async function loadDashboardData() {
   const body = document.getElementById("tableBody");
   body.innerHTML = '<tr><td colspan="9" class="empty">Loading submissions...</td></tr>';
   try {
-    const res = await fetch(SCRIPT_URL);
-    submissions = await res.json();
+    const res = await fetch(SCRIPT_URL + "?action=adminData&password=" + encodeURIComponent(adminPassword));
+    const data = await res.json();
+    
+    if (!data.success) {
+      alert("Session expired or invalid password.");
+      logout();
+      return;
+    }
+
+    submissions = data.submissions;
+    currentSettings = data.settings;
+    renderSettingsUI();
     render();
   } catch (e) {
-    body.innerHTML = '<tr><td colspan="9" class="empty">Unable to load submissions.</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="empty">Unable to load dashboard data.</td></tr>';
   }
 }
 
-/* ---------- RENDER TABLE ---------- */
+function renderSettingsUI() {
+  const statusText = document.getElementById("currentStatusText");
+  const toggleBtn = document.getElementById("toggleBtn");
+
+  if (currentSettings.status === "closed") {
+    statusText.innerHTML = "Status: <strong style='color:#dc2626;'>CLOSED</strong> (Students cannot submit)";
+    toggleBtn.textContent = "Open Submission Portal";
+    toggleBtn.style.background = "#16a34a";
+    toggleBtn.style.color = "white";
+  } else {
+    statusText.innerHTML = "Status: <strong style='color:#16a34a;'>OPEN</strong> " + (currentSettings.deadline ? `(Deadline: ${currentSettings.deadline})` : "(No deadline set)");
+    toggleBtn.textContent = "Close Submission Portal";
+    toggleBtn.style.background = "#dc2626";
+    toggleBtn.style.color = "white";
+  }
+}
+
+async function updateSettings(type, customValue = null) {
+  let newStatus = currentSettings.status;
+  let newDeadline = currentSettings.deadline;
+
+  if (type === "toggle") {
+    newStatus = currentSettings.status === "closed" ? "open" : "closed";
+  } else if (type === "deadline") {
+    const val = document.getElementById("deadlineInput").value;
+    if (!val) { alert("Please pick a valid deadline date & time."); return; }
+    newDeadline = val;
+    newStatus = "open"; // Awtomatikong magbubukas kapag naglagay ng deadline
+  }
+
+  const res = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: JSON.stringify({
+      action: "updateSettings",
+      password: adminPassword,
+      status: newStatus,
+      deadline: newDeadline
+    })
+  });
+  const result = await res.json();
+  if (result.success) {
+    currentSettings = result.settings;
+    renderSettingsUI();
+    alert("Portal settings updated successfully!");
+  } else {
+    alert("Failed to update settings: " + result.message);
+  }
+}
+
+function toggleSubmissionStatus() {
+  updateSettings("toggle");
+}
+
 function render() {
   const q = document.getElementById("search").value.toLowerCase();
   const sec = document.getElementById("sectionFilter").value;
@@ -225,7 +290,6 @@ function render() {
   `).join("");
 }
 
-/* ---------- APPROVE ---------- */
 async function approve(rowIndex) {
   const scoreInput = document.getElementById(`score-${rowIndex}`);
   const score = scoreInput.value.trim();
@@ -244,13 +308,12 @@ async function approve(rowIndex) {
     })
   });
   const result = await res.json();
-  if (result.success) loadSubmissions();
+  if (result.success) loadDashboardData();
   else alert("Failed: " + result.message);
 }
 
-/* ---------- DELETE ---------- */
 async function deleteSubmission(rowIndex) {
-  if (!confirm("Are you sure you want to delete this submission? This cannot be undone.")) return;
+  if (!confirm("Are you sure you want to delete this submission?")) return;
 
   const sub = submissions.find(s => s.rowIndex === rowIndex);
   const res = await fetch(SCRIPT_URL, {
@@ -264,11 +327,10 @@ async function deleteSubmission(rowIndex) {
     })
   });
   const result = await res.json();
-  if (result.success) loadSubmissions();
+  if (result.success) loadDashboardData();
   else alert("Failed: " + result.message);
 }
 
-/* ---------- HELPERS ---------- */
 function escapeHtml(v) {
   return String(v ?? "").replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
