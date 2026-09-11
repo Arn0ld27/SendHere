@@ -5,6 +5,137 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Teacher Dashboard</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  /* ===== SCORING MODAL ===== */
+  .scoring-overlay {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px); display: flex; align-items: center;
+    justify-content: center; z-index: 9999; padding: 20px;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .scoring-box {
+    background: #fff; border-radius: 20px; max-width: 580px; width: 100%;
+    max-height: 90vh; overflow-y: auto; padding: 28px;
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.3);
+    animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .scoring-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1.5px solid #f1f5f9;
+  }
+  .scoring-header h2 {
+    margin: 0 0 4px; font-size: 20px; font-weight: 800;
+    letter-spacing: -0.3px; color: #0f172a;
+  }
+  .scoring-header p { margin: 0; font-size: 13px; color: #64748b; }
+  .scoring-close {
+    background: #f1f5f9; border: 0; width: 32px; height: 32px;
+    border-radius: 8px; font-size: 16px; color: #64748b; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .scoring-close:hover { background: #e2e8f0; color: #0f172a; }
+
+  .criteria-item {
+    background: #f8fafc; border: 1.5px solid #e2e8f0;
+    border-radius: 14px; padding: 16px; margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+  .criteria-item:hover { border-color: #cbd5e1; }
+  .criteria-label {
+    font-size: 14px; font-weight: 700; color: #0f172a;
+    margin-bottom: 12px; display: flex; justify-content: space-between;
+    align-items: center; gap: 10px;
+  }
+  .criteria-max {
+    font-size: 11px; font-weight: 700;
+    background: #eef2ff; padding: 3px 10px; border-radius: 20px;
+    color: #4f46e5; white-space: nowrap;
+  }
+  .criteria-options {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .criteria-option { position: relative; cursor: pointer; }
+  .criteria-option input {
+    position: absolute; opacity: 0; pointer-events: none;
+  }
+  .criteria-option label {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 12px 8px; border-radius: 10px;
+    background: #fff; border: 1.5px solid #e2e8f0;
+    cursor: pointer; transition: all 0.15s ease;
+    margin: 0; font-size: 13px; font-weight: 700; color: #475569;
+  }
+  .criteria-option label .pts {
+    font-size: 11px; font-weight: 600; color: #94a3b8;
+    margin-top: 2px;
+  }
+  .criteria-option.low input:checked + label {
+    background: #fef2f2; border-color: #f87171; color: #dc2626;
+  }
+  .criteria-option.low input:checked + label .pts { color: #dc2626; }
+  .criteria-option.mid input:checked + label {
+    background: #fffbeb; border-color: #f59e0b; color: #d97706;
+  }
+  .criteria-option.mid input:checked + label .pts { color: #d97706; }
+  .criteria-option.high input:checked + label {
+    background: #f0fdf4; border-color: #16a34a; color: #15803d;
+  }
+  .criteria-option.high input:checked + label .pts { color: #15803d; }
+
+  .score-total {
+    background: linear-gradient(135deg, #eef2ff 0%, #faf5ff 100%);
+    border: 1.5px solid #c7d2fe; border-radius: 14px;
+    padding: 18px; text-align: center; margin: 16px 0 20px;
+    position: sticky; bottom: 0;
+  }
+  .score-total-label {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #4f46e5; margin-bottom: 4px;
+  }
+  .score-total-value {
+    font-size: 36px; font-weight: 800; color: #0f172a;
+    letter-spacing: -1.5px; line-height: 1;
+  }
+  .score-total-value .max {
+    font-size: 20px; color: #94a3b8; font-weight: 700;
+  }
+
+  .scoring-actions { display: flex; gap: 10px; }
+  .scoring-actions button {
+    flex: 1; padding: 14px; font-weight: 700; font-size: 14px;
+    border-radius: 12px; cursor: pointer; border: 0;
+    transition: all 0.2s;
+  }
+  .btn-approve {
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    color: #fff;
+    box-shadow: 0 10px 20px -5px rgba(22, 163, 74, 0.4);
+  }
+  .btn-approve:hover { transform: translateY(-1px); box-shadow: 0 12px 24px -5px rgba(22, 163, 74, 0.5); }
+  .btn-approve:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .btn-cancel { background: #f1f5f9; color: #334155; }
+  .btn-cancel:hover { background: #e2e8f0; }
+
+  /* Breakdown display sa table */
+  .breakdown-toggle {
+    font-size: 11px; color: #4f46e5; cursor: pointer;
+    text-decoration: underline; margin-top: 4px; font-weight: 600;
+    background: none; border: 0; padding: 0; display: block;
+  }
+  .breakdown-detail {
+    font-size: 11px; color: #64748b; line-height: 1.6;
+    margin-top: 6px; padding: 8px; background: #f8fafc;
+    border-radius: 8px; display: none;
+    white-space: pre-line;
+  }
+  .breakdown-detail.show { display: block; }
+</style>
 </head>
 <body>
 
@@ -34,7 +165,7 @@
     </div>
   </header>
 
-  <!-- DEADLINE & SUBMISSION CONTROLS PANEL -->
+  <!-- PORTAL CONTROL -->
   <div class="toolbar" style="margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
     <div>
       <h3 style="margin:0 0 4px; font-size:16px;">Portal Control</h3>
@@ -58,8 +189,6 @@
     <input id="search" type="search" placeholder="Search student name..." oninput="render()" style="flex:1;min-width:200px">
     <select id="sectionFilter" onchange="render()">
       <option value="">All Sections</option>
-      <option value="A">BSCS 3A</option>
-      <option value="B">BSCS 3B</option>
     </select>
     <select id="statusFilter" onchange="render()">
       <option value="">All Status</option>
@@ -90,11 +219,16 @@
   </div>
 </div>
 
+<!-- SCORING MODAL CONTAINER -->
+<div id="scoringModalRoot"></div>
+
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby98QvlSPYEW8UMBwOtJGeBa9y2Vfjpnzvua_KQn0Ud2jodU9iFgvIDjaORb7nSpd8d/exec";
 let submissions = [];
 let adminPassword = "";
 let currentSettings = {};
+let scoringCriteria = [];
+let maxScore = 0;
 
 const SESSION_KEY = "teacherDashboardSession";
 
@@ -174,7 +308,7 @@ async function loadDashboardData() {
   try {
     const res = await fetch(SCRIPT_URL + "?action=adminData&password=" + encodeURIComponent(adminPassword));
     const data = await res.json();
-    
+
     if (!data.success) {
       alert("Session expired or invalid password.");
       logout();
@@ -183,6 +317,14 @@ async function loadDashboardData() {
 
     submissions = data.submissions;
     currentSettings = data.settings;
+    scoringCriteria = data.criteria || [];
+    maxScore = data.maxScore || 0;
+
+    const sections = [...new Set(submissions.map(s => s.section).filter(Boolean))].sort();
+    document.getElementById("sectionFilter").innerHTML =
+      '<option value="">All Sections</option>' +
+      sections.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+
     renderSettingsUI();
     render();
   } catch (e) {
@@ -217,7 +359,7 @@ async function updateSettings(type, customValue = null) {
     const val = document.getElementById("deadlineInput").value;
     if (!val) { alert("Please pick a valid deadline date & time."); return; }
     newDeadline = val;
-    newStatus = "open"; // Awtomatikong magbubukas kapag naglagay ng deadline
+    newStatus = "open";
   }
 
   const res = await fetch(SCRIPT_URL, {
@@ -275,13 +417,16 @@ function render() {
       <td><a class="drive-btn" href="${safeUrl(s.link)}" target="_blank" rel="noopener">OPEN</a></td>
       <td><code class="code-tag">${escapeHtml(s.code) || "—"}</code></td>
       <td><span class="badge ${s.status.toLowerCase()}">${escapeHtml(s.status)}</span></td>
-      <td><strong>${escapeHtml(s.score) || "—"}</strong></td>
+      <td>
+        <strong>${escapeHtml(s.score) || "—"}</strong>
+        ${s.breakdown ? `<button class="breakdown-toggle" onclick="toggleBreakdown(${s.rowIndex})">View details</button>
+        <div class="breakdown-detail" id="bd-${s.rowIndex}">${escapeHtml(s.breakdown).replace(/ \| /g, '<br>')}</div>` : ""}
+      </td>
       <td>
         <div class="action-cell">
           ${s.status === "Approved"
             ? `<span class="approved-text">Approved</span>`
-            : `<input type="number" class="score-input" id="score-${s.rowIndex}" placeholder="Score" min="0">
-               <button class="approve-btn" onclick="approve(${s.rowIndex})">Approve</button>`
+            : `<button class="approve-btn" onclick="openScoringModal(${s.rowIndex})">Score & Approve</button>`
           }
           <button class="delete-btn" onclick="deleteSubmission(${s.rowIndex})">Delete</button>
         </div>
@@ -290,54 +435,50 @@ function render() {
   `).join("");
 }
 
-async function approve(rowIndex) {
-  const scoreInput = document.getElementById(`score-${rowIndex}`);
-  const score = scoreInput.value.trim();
-  if (score === "") { alert("Please enter a score."); return; }
+function toggleBreakdown(rowIndex) {
+  const el = document.getElementById(`bd-${rowIndex}`);
+  if (el) el.classList.toggle("show");
+}
 
+// ===== SCORING MODAL =====
+function openScoringModal(rowIndex) {
   const sub = submissions.find(s => s.rowIndex === rowIndex);
-  const res = await fetch(SCRIPT_URL, {
-    method: "POST",
-    headers: {"Content-Type": "text/plain;charset=utf-8"},
-    body: JSON.stringify({
-      action: "approve",
-      password: adminPassword,
-      timestamp: sub.timestamp,
-      name: sub.name,
-      score: score
-    })
-  });
-  const result = await res.json();
-  if (result.success) loadDashboardData();
-  else alert("Failed: " + result.message);
-}
+  if (!sub) return;
 
-async function deleteSubmission(rowIndex) {
-  if (!confirm("Are you sure you want to delete this submission?")) return;
+  const root = document.getElementById("scoringModalRoot");
+  root.innerHTML = "";
 
-  const sub = submissions.find(s => s.rowIndex === rowIndex);
-  const res = await fetch(SCRIPT_URL, {
-    method: "POST",
-    headers: {"Content-Type": "text/plain;charset=utf-8"},
-    body: JSON.stringify({
-      action: "delete",
-      password: adminPassword,
-      timestamp: sub.timestamp,
-      name: sub.name
-    })
-  });
-  const result = await res.json();
-  if (result.success) loadDashboardData();
-  else alert("Failed: " + result.message);
-}
+  const overlay = document.createElement("div");
+  overlay.className = "scoring-overlay";
 
-function escapeHtml(v) {
-  return String(v ?? "").replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-}
-function safeUrl(url) {
-  return /^https:\/\/(drive|docs)\.google\.com\//i.test(url) ? url : "#";
-}
-</script>
-</body>
-</html>
+  const criteriaHtml = scoringCriteria.map(c => `
+    <div class="criteria-item" data-criteria="${c.id}">
+      <div class="criteria-label">
+        <span>${escapeHtml(c.label)}</span>
+        <span class="criteria-max">Max ${c.high}</span>
+      </div>
+      <div class="criteria-options">
+        <div class="criteria-option low">
+          <input type="radio" name="crit-${c.id}" id="crit-${c.id}-low" value="low" data-points="${c.low}">
+          <label for="crit-${c.id}-low">
+            <span>Low</span>
+            <span class="pts">${c.low} pts</span>
+          </label>
+        </div>
+        <div class="criteria-option mid">
+          <input type="radio" name="crit-${c.id}" id="crit-${c.id}-mid" value="mid" data-points="${c.mid}">
+          <label for="crit-${c.id}-mid">
+            <span>Mid</span>
+            <span class="pts">${c.mid} pts</span>
+          </label>
+        </div>
+        <div class="criteria-option high">
+          <input type="radio" name="crit-${c.id}" id="crit-${c.id}-high" value="high" data-points="${c.high}">
+          <label for="crit-${c.id}-high">
+            <span>High</span>
+            <span class="pts">${c.high} pts</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  `
