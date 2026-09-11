@@ -92,7 +92,6 @@
     background: linear-gradient(135deg, #eef2ff 0%, #faf5ff 100%);
     border: 1.5px solid #c7d2fe; border-radius: 14px;
     padding: 18px; text-align: center; margin: 16px 0 20px;
-    position: sticky; bottom: 0;
   }
   .score-total-label {
     font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
@@ -264,12 +263,16 @@ function showDashboard() {
 
 function login() {
   const pass = document.getElementById("adminPass").value;
+  const m = document.getElementById("loginMsg");
+
   if (!pass) {
-    const m = document.getElementById("loginMsg");
     m.textContent = "Please enter password.";
     m.className = "message error";
     return;
   }
+
+  m.textContent = "Logging in...";
+  m.className = "message";
 
   fetch(SCRIPT_URL, {
     method: "POST",
@@ -284,14 +287,13 @@ function login() {
       showDashboard();
       loadDashboardData();
     } else {
-      const m = document.getElementById("loginMsg");
       m.textContent = res.message;
       m.className = "message error";
     }
   })
-  .catch(() => {
-    const m = document.getElementById("loginMsg");
-    m.textContent = "Connection failed.";
+  .catch((err) => {
+    console.error("Login error:", err);
+    m.textContent = "Connection failed. Please try again.";
     m.className = "message error";
   });
 }
@@ -315,8 +317,8 @@ async function loadDashboardData() {
       return;
     }
 
-    submissions = data.submissions;
-    currentSettings = data.settings;
+    submissions = data.submissions || [];
+    currentSettings = data.settings || {};
     scoringCriteria = data.criteria || [];
     maxScore = data.maxScore || 0;
 
@@ -328,6 +330,7 @@ async function loadDashboardData() {
     renderSettingsUI();
     render();
   } catch (e) {
+    console.error("Dashboard load error:", e);
     body.innerHTML = '<tr><td colspan="9" class="empty">Unable to load dashboard data.</td></tr>';
   }
 }
@@ -416,7 +419,7 @@ function render() {
       <td>${escapeHtml(s.date)}</td>
       <td><a class="drive-btn" href="${safeUrl(s.link)}" target="_blank" rel="noopener">OPEN</a></td>
       <td><code class="code-tag">${escapeHtml(s.code) || "—"}</code></td>
-      <td><span class="badge ${s.status.toLowerCase()}">${escapeHtml(s.status)}</span></td>
+      <td><span class="badge ${String(s.status || '').toLowerCase()}">${escapeHtml(s.status)}</span></td>
       <td>
         <strong>${escapeHtml(s.score) || "—"}</strong>
         ${s.breakdown ? `<button class="breakdown-toggle" onclick="toggleBreakdown(${s.rowIndex})">View details</button>
@@ -481,4 +484,138 @@ function openScoringModal(rowIndex) {
         </div>
       </div>
     </div>
-  `
+  `).join("");
+
+  overlay.innerHTML = `
+    <div class="scoring-box">
+      <div class="scoring-header">
+        <div>
+          <h2>Score Submission</h2>
+          <p>${escapeHtml(sub.name)} — ${escapeHtml(sub.section)}</p>
+        </div>
+        <button class="scoring-close" id="scoringClose">✕</button>
+      </div>
+
+      <div id="criteriaContainer">
+        ${criteriaHtml}
+      </div>
+
+      <div class="score-total">
+        <div class="score-total-label">Total Score</div>
+        <div class="score-total-value">
+          <span id="totalScoreValue">0</span><span class="max"> / ${maxScore}</span>
+        </div>
+      </div>
+
+      <div class="scoring-actions">
+        <button class="btn-cancel" id="scoringCancel">Cancel</button>
+        <button class="btn-approve" id="scoringApprove" disabled>Approve Submission</button>
+      </div>
+    </div>
+  `;
+
+  root.appendChild(overlay);
+
+  const totalValueEl = overlay.querySelector("#totalScoreValue");
+  const approveBtn = overlay.querySelector("#scoringApprove");
+  const cancelBtn = overlay.querySelector("#scoringCancel");
+  const closeBtn = overlay.querySelector("#scoringClose");
+
+  function updateTotal() {
+    let total = 0;
+    let allAnswered = true;
+    scoringCriteria.forEach(c => {
+      const checked = overlay.querySelector(`input[name="crit-${c.id}"]:checked`);
+      if (checked) {
+        total += parseInt(checked.getAttribute("data-points"), 10) || 0;
+      } else {
+        allAnswered = false;
+      }
+    });
+    totalValueEl.textContent = total;
+    approveBtn.disabled = !allAnswered;
+  }
+
+  overlay.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.addEventListener("change", updateTotal);
+  });
+
+  const closeModal = () => { root.innerHTML = ""; };
+
+  closeBtn.addEventListener("click", closeModal);
+  cancelBtn.addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+
+  approveBtn.addEventListener("click", async () => {
+    const scores = {};
+    scoringCriteria.forEach(c => {
+      const checked = overlay.querySelector(`input[name="crit-${c.id}"]:checked`);
+      scores[c.id] = checked ? checked.value : "";
+    });
+
+    approveBtn.disabled = true;
+    approveBtn.textContent = "Approving...";
+
+    try {
+      const res = await fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({
+          action: "approve",
+          password: adminPassword,
+          timestamp: sub.timestamp,
+          name: sub.name,
+          scores: scores
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        closeModal();
+        loadDashboardData();
+      } else {
+        alert("Failed to approve: " + result.message);
+        approveBtn.disabled = false;
+        approveBtn.textContent = "Approve Submission";
+      }
+    } catch (e) {
+      console.error("Approve error:", e);
+      alert("Network error. Please try again.");
+      approveBtn.disabled = false;
+      approveBtn.textContent = "Approve Submission";
+    }
+  });
+}
+
+async function deleteSubmission(rowIndex) {
+  if (!confirm("Are you sure you want to delete this submission?")) return;
+
+  const sub = submissions.find(s => s.rowIndex === rowIndex);
+  if (!sub) return;
+
+  const res = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: JSON.stringify({
+      action: "delete",
+      password: adminPassword,
+      timestamp: sub.timestamp,
+      name: sub.name
+    })
+  });
+  const result = await res.json();
+  if (result.success) loadDashboardData();
+  else alert("Failed: " + result.message);
+}
+
+function escapeHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+function safeUrl(url) {
+  return /^https:\/\/(drive|docs)\.google\.com\//i.test(url) ? url : "#";
+}
+</script>
+</body>
+</html>
